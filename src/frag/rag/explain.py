@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from frag.eval.relevance import _normalize, extract_facts
+from frag.eval.relevance import extract_facts, fact_in_text, fact_label
 
 
 def attribute_rrf(
@@ -34,11 +34,13 @@ def ground_answer(answer: str, contexts: list[dict[str, Any]], doc_id_fn) -> dic
     supported = 0
     for fact in facts:
         labels = [
-            doc_id_fn(c, i) for i, c in enumerate(contexts) if fact in _normalize(c.get("text", ""))
+            doc_id_fn(c, i)
+            for i, c in enumerate(contexts)
+            if fact_in_text(fact, c.get("text", ""))
         ]
         if labels:
             supported += 1
-        per_fact.append({"fact": fact, "supported_by": labels})
+        per_fact.append({"fact": fact_label(fact), "supported_by": labels})
     return {
         "facts": per_fact,
         "grounded_facts": supported,

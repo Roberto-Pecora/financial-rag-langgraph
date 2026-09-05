@@ -26,6 +26,30 @@ def test_chunk_not_relevant_when_missing_a_fact():
     assert not chunk_is_relevant(chunk, ["155,237", "21%"])
 
 
+def test_extract_facts_captures_spelled_out_durations():
+    # Contract phrasing: word number, optional parenthetical, unit.
+    assert extract_facts("The renewal term is one year.")
+    assert extract_facts("Notice of thirty (30) days is required.")
+
+
+def test_spelled_out_duration_matches_source_chunk():
+    facts = extract_facts("The renewal term of the distributor agreement is one year.")
+    chunk = "renewable on an annual basis for one (1) year terms for up to another ten (10) years"
+    assert chunk_is_relevant(chunk, facts)
+
+
+def test_spelled_out_duration_rejects_incidental_digits():
+    # A "1" inside "2020" and a stray "year" elsewhere must NOT count as the term.
+    facts = extract_facts("The renewal term is one year.")
+    noise = "This mentions the year 2020 and the number 31 but states no renewal term."
+    assert not chunk_is_relevant(noise, facts)
+
+
+def test_spelled_out_duration_rejects_unrelated_text():
+    facts = extract_facts("The renewal term is one year.")
+    assert not chunk_is_relevant("A wholly unrelated clause about governing law.", facts)
+
+
 def test_evaluate_scores_by_content_not_docid():
     golden = [{"query": "q", "reference_answer": "Revenue was $331,839 million, up 18%."}]
     # Gold chunk sits at rank 2 (index 1); doc_ids are irrelevant now.
