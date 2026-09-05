@@ -43,9 +43,18 @@ services:
       - langfuse_minio:/data
     restart: unless-stopped
 
+  # One-shot: create the bucket Langfuse v3 uploads events/media to, then exit.
+  minio-init:
+    image: minio/mc
+    depends_on: [minio]
+    entrypoint: >
+      sh -c "until mc alias set m http://minio:9000 minio miniosecret; do sleep 2; done;
+             mc mb -p m/langfuse"
+    restart: on-failure
+
   langfuse-worker:
     image: langfuse/langfuse-worker:3
-    depends_on: [langfuse-db, clickhouse, redis, minio]
+    depends_on: [langfuse-db, clickhouse, redis, minio, minio-init]
     environment: &langfuse-env
       DATABASE_URL: postgresql://postgres:postgres@langfuse-db:5432/langfuse
       CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000

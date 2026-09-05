@@ -85,8 +85,14 @@ poisoned document cannot redirect the model or forge a delimiter.
 ```bash
 make install          # uv venv + editable install with dev extras
 make up               # Qdrant + self-hosted Langfuse via Docker Compose
-cp .env.example .env  # add OPENROUTER_API_KEY and the LANGFUSE_* keys from the UI
+cp .env.example .env  # add OPENROUTER_API_KEY
 ```
+
+The compose stack boots Langfuse headless: it provisions a project with known keys
+(`pk-lf-frag-local` / `sk-lf-frag-local`) and creates the MinIO bucket it needs, so
+tracing works without any UI signup — set those two keys in `.env` and traces flow.
+Change them for real use. No Docker? Set `QDRANT_PATH=./qdrant_local` to run Qdrant
+embedded on disk; leave the Langfuse keys unset and the app runs untraced.
 
 Build a corpus, ingest it, and ask:
 
