@@ -88,12 +88,18 @@ make up               # Qdrant + self-hosted Langfuse via Docker Compose
 cp .env.example .env  # add OPENROUTER_API_KEY and the LANGFUSE_* keys from the UI
 ```
 
-Ingest a corpus and ask:
+Build a corpus, ingest it, and ask:
 
 ```bash
+python scripts/build_corpus.py --out data/corpus.jsonl   # SEC filings (needs SEC_USER_AGENT)
+python scripts/acquire_corpus.py --out data/corpus.jsonl # or CUAD + FinanceBench ([data] extra)
 python scripts/ingest.py --corpus data/corpus.jsonl
 python scripts/ask.py "What changed in revenue and liquidity?"
 ```
+
+Ingestion handles text PDFs (`pymupdf`), table linearisation (`pdfplumber`),
+scanned-document OCR (AWS Textract, injectable and optional), and SEC HTML, all
+normalised into one chunk schema with stable content-hash ids.
 
 Serve the API:
 
@@ -130,6 +136,26 @@ python scripts/eval_retrieval.py --golden data/golden.jsonl --k 10
 `recall@k`, `precision@k`, `MRR@k`, and `nDCG@k` are computed exactly and pushed to
 Langfuse as scores, so retrieval quality is tracked over time next to request traces.
 
+## Train on the corpus
+
+No manually labelled relevance data is required. The pipeline generates synthetic
+questions and mines BM25 hard negatives, then fine-tunes the embedding model and a
+cross-encoder reranker.
+
+```bash
+python scripts/mine_pairs.py --corpus data/corpus.jsonl --out data/pairs.jsonl
+python scripts/finetune_embedding.py --pairs data/pairs.jsonl --out artifacts/bge-ft
+python scripts/train_reranker.py --pairs data/pairs.jsonl --out artifacts/reranker
+```
+
+A golden set for evaluation is derived from the corpus and can be re-verified when
+chunking changes:
+
+```bash
+python scripts/build_golden.py
+python scripts/verify_golden.py   # --write to expand gold ids after a re-chunk
+```
+
 ## Development
 
 ```bash
@@ -144,10 +170,9 @@ The graph is built with an injectable `Deps`, so fakes replace every real backen
 
 - The critic is an optional weak LLM-judge signal, not a retrieval metric.
 - This is a low-cost research platform, not a production-volume document service.
-- The knowledge-graph and evaluation modules are ported from the companion project.
-  Source ingestion (PDF/OCR/SEC) and embedding/reranker training still live there;
-  this repository's focus is the graph and its observability, and it consumes a
-  corpus those tools produce.
+- AWS Textract is the only optional cloud path (scanned-document OCR); it is
+  injectable, so the pipeline runs fully local without it. Everything else — the
+  graph, retrieval, training, evaluation, and observability — needs no cloud account.
 
 ## License
 
