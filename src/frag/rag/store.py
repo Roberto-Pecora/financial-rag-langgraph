@@ -46,7 +46,11 @@ class QdrantStore:
     ) -> None:
         self.hybrid = hybrid
         self.collection_name = collection_name or settings.qdrant_collection
-        self.client = QdrantClient(url=url or settings.qdrant_url)
+        # Embedded on-disk mode (QDRANT_PATH) needs no server; else connect over HTTP.
+        if url is None and settings.qdrant_path:
+            self.client = QdrantClient(path=settings.qdrant_path)
+        else:
+            self.client = QdrantClient(url=url or settings.qdrant_url)
         self.embedder = embedder or make_embedder(model_name=settings.embedding_model)
         self._bm25 = None
         self._bm25_doc_ids: list[str] = []

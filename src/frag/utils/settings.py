@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     # retrieval
     embedding_model: str = Field(default="BAAI/bge-base-en-v1.5", alias="EMBEDDING_MODEL")
     qdrant_url: str = Field(default="http://localhost:6333", alias="QDRANT_URL")
+    qdrant_path: str | None = Field(default=None, alias="QDRANT_PATH")  # embedded, no server
     qdrant_collection: str = Field(default="frag", alias="QDRANT_COLLECTION")
     top_k: int = Field(default=8, alias="TOP_K")
     rerank: bool = Field(default=False, alias="RERANK")

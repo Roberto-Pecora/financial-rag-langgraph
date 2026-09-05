@@ -62,7 +62,9 @@ def build_graph(deps: Deps | None = None) -> Any:
     g.add_edge("rerank", "actor")
     g.add_conditional_edges("actor", nodes.critic_edge, {"critic": "critic", "ground": "ground"})
     g.add_edge("critic", "ground")
-    g.add_edge("agent", "ground")
+    g.add_conditional_edges(
+        "agent", nodes.agent_edge, {"ground": "ground", "entity_filter": "entity_filter"}
+    )
     g.add_edge("ground", "screen_output")
     g.add_edge("screen_output", END)
 

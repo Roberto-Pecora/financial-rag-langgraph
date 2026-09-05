@@ -274,3 +274,11 @@ def grade_edge(state: GraphState) -> str:
 
 def critic_edge(state: GraphState) -> str:
     return "critic" if settings.critic else "ground"
+
+
+def agent_edge(state: GraphState) -> str:
+    """If the tool-loop produced no answer, fall back to the RAG path."""
+    if (state.get("answer") or "").strip():
+        return "ground"
+    logger.warning("agent produced no answer; falling back to RAG")
+    return "entity_filter"

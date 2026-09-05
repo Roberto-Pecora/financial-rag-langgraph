@@ -10,3 +10,5 @@ data/corpus*.jsonl
 data/*.json
 artifacts/
 .langfuse/
+qdrant_local/
+data/corpus_sample.jsonl

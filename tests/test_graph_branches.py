@@ -90,3 +90,17 @@ def test_agent_route_used_for_multihop(deps, monkeypatch):
     out = run("Compare Amazon and Nike revenue", deps=deps)
     assert out["route"] == "multi_hop"
     assert seen["q"]
+
+
+def test_agent_empty_falls_back_to_rag(deps, monkeypatch):
+    def empty_agent_node(_deps):
+        def run_node(_state):
+            return {"answer": "", "citations": [], "contexts": [], "status": "abstained"}
+
+        return run_node
+
+    monkeypatch.setattr("frag.graph.build.agent_node", empty_agent_node)
+    out = run("Compare Amazon and Nike revenue", deps=deps)
+    assert out["route"] == "multi_hop"
+    assert out["status"] == "accepted"  # RAG fallback produced an answer
+    assert "5,678" in out["answer"]
