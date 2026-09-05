@@ -6,6 +6,14 @@ import pytest
 
 from frag.graph.deps import Deps
 from frag.rag.llm_schemas import ActorResponse, CriticResponse
+from frag.utils.settings import settings
+
+
+@pytest.fixture(autouse=True)
+def _no_tracing(monkeypatch):
+    """Force tracing off so tests stay hermetic regardless of a local .env."""
+    monkeypatch.setattr(settings, "langfuse_public_key", None)
+    monkeypatch.setattr(settings, "langfuse_secret_key", None)
 
 
 class FakeStore:

@@ -22,16 +22,23 @@ def _init() -> None:
     global _handler, _client
     if _handler is not None or not settings.tracing_enabled:
         return
-    from langfuse import Langfuse
-    from langfuse.callback import CallbackHandler
+    # Tracing must never break the request path: if the SDK or its optional
+    # langchain integration is missing/misconfigured, log and run untraced.
+    try:
+        from langfuse import Langfuse
+        from langfuse.callback import CallbackHandler
 
-    kwargs = {
-        "public_key": settings.langfuse_public_key,
-        "secret_key": settings.langfuse_secret_key,
-        "host": settings.langfuse_host,
-    }
-    _client = Langfuse(**kwargs)
-    _handler = CallbackHandler(**kwargs)
+        kwargs = {
+            "public_key": settings.langfuse_public_key,
+            "secret_key": settings.langfuse_secret_key,
+            "host": settings.langfuse_host,
+        }
+        _client = Langfuse(**kwargs)
+        _handler = CallbackHandler(**kwargs)
+    except Exception as exc:
+        logger.warning("langfuse init failed; running untraced", error=str(exc))
+        _handler = None
+        _client = None
 
 
 def callbacks() -> list[Any]:
@@ -59,5 +66,10 @@ def score(name: str, value: float, *, trace_id: str | None = None, comment: str 
 
 
 def flush() -> None:
-    if _client is not None:
-        _client.flush()
+    # The callback handler batches on its own client, so flush both.
+    for c in (_handler, _client):
+        if c is not None:
+            try:
+                c.flush()
+            except Exception as exc:
+                logger.warning("langfuse flush failed", error=str(exc))
