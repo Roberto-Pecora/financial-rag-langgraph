@@ -34,9 +34,7 @@ def ground_answer(answer: str, contexts: list[dict[str, Any]], doc_id_fn) -> dic
     supported = 0
     for fact in facts:
         labels = [
-            doc_id_fn(c, i)
-            for i, c in enumerate(contexts)
-            if fact_in_text(fact, c.get("text", ""))
+            doc_id_fn(c, i) for i, c in enumerate(contexts) if fact_in_text(fact, c.get("text", ""))
         ]
         if labels:
             supported += 1

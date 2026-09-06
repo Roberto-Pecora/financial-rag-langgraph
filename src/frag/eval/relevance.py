@@ -14,9 +14,24 @@ import re
 # To capture contract terms when spelled out ("one year", "thirty (30) days"),
 # since those carry no digits for the numeric extraction below to match.
 _WORD_NUMBERS = {
-    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
-    "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "twenty": 20,
-    "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "ninety": 90,
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+    "eleven": 11,
+    "twelve": 12,
+    "twenty": 20,
+    "thirty": 30,
+    "forty": 40,
+    "fifty": 50,
+    "sixty": 60,
+    "ninety": 90,
 }
 _WORD_DURATION = re.compile(
     rf"\b({'|'.join(_WORD_NUMBERS)})\b\s*(?:\(\s*(\d+)\s*\)\s*)?(day|month|year)s?",
