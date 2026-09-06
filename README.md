@@ -183,6 +183,12 @@ python scripts/build_golden.py
 python scripts/verify_golden.py   # --write to expand gold ids after a re-chunk
 ```
 
+A self-contained GPU notebook, `notebooks/finetune_cuad.ipynb`, runs the fine-tune
+experiment end to end on Colab or Kaggle: it builds leakage-free CUAD training pairs
+(disjoint train/test contracts), fine-tunes the embedder and cross-encoder reranker,
+and reports base vs fine-tuned vs fine-tuned-plus-reranker on per-contract clause
+retrieval.
+
 ## Performance and reliability notes
 
 Measured on the sample corpus with embedded Qdrant and `bge-base` on Apple MPS.
