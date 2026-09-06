@@ -10,8 +10,10 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
+from frag.api.ui import PAGE
 from frag.graph.build import build_graph
 from frag.graph.deps import Deps
 from frag.llm import observability
@@ -43,6 +45,11 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Financial RAG (LangGraph)", version="0.1.0", lifespan=lifespan)
+
+
+@app.get("/", response_class=HTMLResponse)
+def index() -> str:
+    return PAGE
 
 
 class AskRequest(BaseModel):

@@ -59,6 +59,10 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "B", "UP", "C4"]
 
+[tool.ruff.lint.per-file-ignores]
+# ui.py is one embedded HTML/CSS/JS page string; its long lines aren't Python.
+"src/frag/api/ui.py" = ["E501"]
+
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
