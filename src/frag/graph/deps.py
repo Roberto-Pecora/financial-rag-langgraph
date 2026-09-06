@@ -37,9 +37,9 @@ class Deps:
         return self.reranker
 
     def _structured(self, role: str, model: type) -> Any:
-        from frag.llm.client import chat_model
+        from frag.llm.client import structured_model
 
-        return chat_model(role).with_structured_output(model)
+        return structured_model(role, model)
 
     def get_actor(self) -> Any:
         from frag.rag.llm_schemas import ActorResponse

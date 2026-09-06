@@ -1,8 +1,8 @@
 """LLM access via LangChain ChatOpenAI pointed at OpenRouter.
 
-`chat_model(role)` returns a configured ChatOpenAI for a role's model. Graph nodes
-that need typed output call `.with_structured_output(Model)`; ported pure helpers
-that expect a `generate(prompt) -> str` surface use `GenerateAdapter`.
+`chat_model(role)` returns a configured ChatOpenAI for a role's model. Typed
+output goes through `structured_model`; ported pure helpers that expect a
+`generate(prompt) -> str` surface use `GenerateAdapter`.
 """
 
 from __future__ import annotations
@@ -34,6 +34,16 @@ def chat_model(role: str, **overrides: Any) -> ChatOpenAI:
     }
     params.update(overrides)
     return ChatOpenAI(**params)
+
+
+def structured_model(role: str, schema: type) -> Any:
+    """Typed output via json_mode.
+
+    The default function_calling method is unreliable on open OpenRouter models,
+    which often echo the schema instead of an instance; json_mode is steadier and
+    matches what the prompts already ask for ("Return ONLY valid JSON").
+    """
+    return chat_model(role).with_structured_output(schema, method="json_mode")
 
 
 class GenerateAdapter:

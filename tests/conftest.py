@@ -10,10 +10,13 @@ from frag.utils.settings import settings
 
 
 @pytest.fixture(autouse=True)
-def _no_tracing(monkeypatch):
-    """Force tracing off so tests stay hermetic regardless of a local .env."""
+def _hermetic_settings(monkeypatch):
+    """Pin tracing and behaviour flags to defaults so tests ignore a local .env.
+    Tests needing a flag on set it explicitly."""
     monkeypatch.setattr(settings, "langfuse_public_key", None)
     monkeypatch.setattr(settings, "langfuse_secret_key", None)
+    for flag in ("critic", "corrective", "rerank", "router_llm"):
+        monkeypatch.setattr(settings, flag, False)
 
 
 class FakeStore:

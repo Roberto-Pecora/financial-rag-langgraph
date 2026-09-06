@@ -205,6 +205,20 @@ def critic_node(deps: Deps) -> Callable[[GraphState], dict]:
         except Exception as exc:
             logger.warning("critic call failed; vetoing", error=str(exc))
             return {"status": "abstained", "critic_score": 0.0, "critic_notes": "critic failed"}
+        # All-zero scores mean an empty/omitted-field response.
+        scores = (
+            resp.overall_score,
+            resp.faithfulness_score,
+            resp.completeness_score,
+            resp.citation_score,
+        )
+        if not any(scores):
+            logger.warning("critic returned all-zero scores; treating as failure")
+            return {
+                "status": "abstained",
+                "critic_score": 0.0,
+                "critic_notes": "critic no-response",
+            }
         notes = (
             f"faithfulness={resp.faithfulness_score:.2f} "
             f"completeness={resp.completeness_score:.2f} citations={resp.citation_score:.2f}"
