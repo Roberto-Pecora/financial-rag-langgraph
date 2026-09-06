@@ -6,27 +6,41 @@ checks the vector store, so an orchestrator holds traffic until retrieval is up.
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
 from frag.graph.build import build_graph
+from frag.graph.deps import Deps
 from frag.llm import observability
 from frag.utils.logging import get_logger
 from frag.utils.settings import settings
 
 logger = get_logger(__name__)
-app = FastAPI(title="Financial RAG (LangGraph)", version="0.1.0")
 
+_deps = Deps()
 _graph: Any = None
 
 
 def _get_graph() -> Any:
     global _graph
     if _graph is None:
-        _graph = build_graph()
+        _graph = build_graph(_deps)
     return _graph
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    # Move the one-time model load + cold encode to boot, off the first query.
+    _get_graph()
+    _deps.get_store().embedder.encode("warmup")
+    logger.info("warmup complete", documents=_deps.get_store().count())
+    yield
+
+
+app = FastAPI(title="Financial RAG (LangGraph)", version="0.1.0", lifespan=lifespan)
 
 
 class AskRequest(BaseModel):
@@ -68,9 +82,7 @@ def health() -> dict[str, str]:
 def ready() -> dict[str, Any]:
     """Ready only when the vector store answers. Returns 200 with a flag either way."""
     try:
-        from frag.rag.store import QdrantStore
-
-        count = QdrantStore().count()
+        count = _deps.get_store().count()
         return {"ready": True, "documents": count, "tracing": settings.tracing_enabled}
     except Exception as exc:
         logger.warning("readiness check failed", error=str(exc))
