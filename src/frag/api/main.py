@@ -33,10 +33,12 @@ def _get_graph() -> Any:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    # Move the one-time model load + cold encode to boot, off the first query.
+    # Move one-time costs (model load, cold encode, BM25 index build) to boot,
+    # off the first query, by running a real search once.
     _get_graph()
-    _deps.get_store().embedder.encode("warmup")
-    logger.info("warmup complete", documents=_deps.get_store().count())
+    store = _deps.get_store()
+    store.search("warmup", top_k=1)
+    logger.info("warmup complete", documents=store.count())
     yield
 
 
