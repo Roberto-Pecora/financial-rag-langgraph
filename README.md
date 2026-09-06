@@ -158,10 +158,37 @@ fine-tuning:
 FinanceBench is hard for base retrieval: the answer is often a figure buried in a
 table that a general-purpose embedding ranks low. A generic reranker barely moves
 it — recall@10 nudges up, recall@5 slips. That is the point of the project's thesis:
-the lever is corpus-specific fine-tuning of the embedder and reranker, not bolting a
-general model onto a specific corpus. These numbers are the baseline that lever has
-to beat; the training pipeline below produces the fine-tuned models, and the
-companion AWS project reports the fine-tuning ablation at larger scale.
+fine-tuning the embedder and reranker on the target corpus improves retrieval more
+than substituting a different general-purpose model. These numbers are the baseline
+that fine-tuning has to improve on.
+
+### Fine-tuning result on CUAD clause retrieval
+
+`notebooks/finetune_cuad.ipynb` runs that experiment end to end on a GPU: 3,510
+training pairs mined from 120 CUAD contracts (question, correct clause, same-contract
+wrong clauses as hard negatives), evaluated on clause retrieval within 20 held-out
+contracts the training pairs never touched.
+
+| Configuration | recall@1 | recall@5 | recall@10 | nDCG@10 |
+|---|---:|---:|---:|---:|
+| Base `bge-base` | 0.227 | 0.552 | 0.707 | 0.451 |
+| Fine-tuned `bge-base` | 0.517 | 0.833 | 0.912 | 0.707 |
+| Fine-tuned + trained reranker | 0.536 | 0.858 | 0.912 | 0.727 |
+
+Fine-tuning on a few thousand corpus-specific pairs more than doubles recall@1 and
+raises nDCG@10 by 26 points, with no manually labelled relevance data — the pairs
+come from CUAD's existing question/answer annotations, split by contract so no
+training pair shares a document with an evaluation question. Fine-tuning shows a
+weaker effect on FinanceBench above; on CUAD's more templated clause language,
+corpus-specific training earns a much larger improvement.
+
+The trained reranker adds recall@1 +0.019, recall@5 +0.025, no change to recall@10,
+and nDCG@10 +0.020 on top of the fine-tuned embedder alone. Measured on the same
+GPU with CUDA-synchronised timing, that comes at a real cost: median per-query
+latency rises from 10.4 ms (embedding search only) to 53.4 ms with reranking added,
+a fivefold increase, for a gain that does not move recall@10 at all. On this corpus
+the reranker is not a clearly worthwhile addition; the fine-tuned embedder alone
+captures nearly all of the improvement over the base model.
 
 ## Train on the corpus
 
