@@ -114,6 +114,8 @@ make serve
 curl -s localhost:8000/v1/ask -d '{"question":"What were net sales?"}'
 ```
 
+Open `http://localhost:8000/` for a single-page UI that shows the answer, route,
+citations, critic score, and grounding; `/docs` is the API's Swagger surface.
 `/health` is liveness; `/ready` also checks the vector store.
 
 ## Configuration
@@ -142,6 +144,25 @@ python scripts/eval_retrieval.py --golden data/golden.jsonl --k 10
 `recall@k`, `precision@k`, `MRR@k`, and `nDCG@k` are computed exactly and pushed to
 Langfuse as scores, so retrieval quality is tracked over time next to request traces.
 
+### Baseline on FinanceBench
+
+Measured on the FinanceBench evidence corpus (276 chunks) over the 110 questions
+whose answer contains a figure, scored by content-based relevance. Base models, no
+fine-tuning:
+
+| Configuration | recall@1 | recall@5 | recall@10 | nDCG@10 |
+|---|---:|---:|---:|---:|
+| Hybrid dense + BM25 with RRF (`bge-base`) | 0.064 | 0.136 | 0.182 | 0.117 |
+| + off-the-shelf cross-encoder rerank | 0.064 | 0.118 | 0.200 | 0.120 |
+
+FinanceBench is hard for base retrieval: the answer is often a figure buried in a
+table that a general-purpose embedding ranks low. A generic reranker barely moves
+it — recall@10 nudges up, recall@5 slips. That is the point of the project's thesis:
+the lever is corpus-specific fine-tuning of the embedder and reranker, not bolting a
+general model onto a specific corpus. These numbers are the baseline that lever has
+to beat; the training pipeline below produces the fine-tuned models, and the
+companion AWS project reports the fine-tuning ablation at larger scale.
+
 ## Train on the corpus
 
 No manually labelled relevance data is required. The pipeline generates synthetic
@@ -161,6 +182,26 @@ chunking changes:
 python scripts/build_golden.py
 python scripts/verify_golden.py   # --write to expand gold ids after a re-chunk
 ```
+
+## Performance and reliability notes
+
+Measured on the sample corpus with embedded Qdrant and `bge-base` on Apple MPS.
+
+- **Retrieval latency.** Warm hybrid search completes in approximately 40 ms. The
+  one-time model load and cold encode (~11 s) are performed at startup by a warmup
+  that issues a single real search, removing them from the request path.
+- **Latency is LLM-bound.** A single lookup requires one `ChatOpenAI` call (1–2 s);
+  the multi-hop agent loop requires several tool-calling round-trips and takes tens
+  of seconds, which is why the router directs only multi-hop questions to it.
+- **Structured output uses `json_mode`.** Under function-calling, open OpenRouter
+  models frequently return the JSON schema rather than an instance; a framework may
+  coerce that into an empty object and cause the critic to reject a valid answer.
+  `json_mode` is more reliable and aligns with the prompts' instructions.
+- **Agent-to-RAG fallback.** When the tool-loop returns no answer — some open models
+  under-emit tool calls — the graph falls back to the retrieval path, so a multi-hop
+  question does not dead-end.
+- **No cloud or Docker dependency.** Setting `QDRANT_PATH` runs Qdrant embedded on
+  disk; the application, retrieval, and evaluation run locally, with tracing optional.
 
 ## Development
 
