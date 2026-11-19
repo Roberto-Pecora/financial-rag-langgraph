@@ -277,8 +277,10 @@ def critic_edge(state: GraphState) -> str:
 
 
 def agent_edge(state: GraphState) -> str:
-    """If the tool-loop produced no answer, fall back to the RAG path."""
-    if (state.get("answer") or "").strip():
-        return "ground"
-    logger.warning("agent produced no answer; falling back to RAG")
+    """Answer from the agent's evidence via the actor; with none, fall back to RAG."""
+    from frag.graph.agent import has_retrieved_evidence
+
+    if has_retrieved_evidence(state.get("contexts") or []):
+        return "actor"
+    logger.warning("agent gathered no retrieved evidence; falling back to RAG")
     return "entity_filter"

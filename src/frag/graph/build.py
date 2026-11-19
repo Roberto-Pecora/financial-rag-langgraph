@@ -2,10 +2,10 @@
 
 screen_input ─refused─▶ END
      │ ok
-  rewrite ─▶ route ─┬─ multi_hop ─▶ agent ─────────────┐
-                    │                                    │
-                    └─ lookup ─▶ entity_filter ─▶ retrieve
-                                                    │
+  rewrite ─▶ route ─┬─ multi_hop ─▶ agent ─(evidence)────────────────────────────┐
+                    │                 └─(no evidence)─▶ entity_filter            │
+                    └─ lookup ─▶ entity_filter ─▶ retrieve                       │
+                                                    │                            ▼
                                  rewrite_query ◀─ grade ─(enough)─▶ rerank ─▶ actor
                                       │                                          │
                                       └────────▶ retrieve                 (CRITIC?)
@@ -13,6 +13,9 @@ screen_input ─refused─▶ END
                                     ground ◀── critic ◀──────────────────────────┘
                                       │
                                 screen_output ─▶ END
+
+The agent only gathers evidence; every answer is written by the actor and passes
+the same critic, grounding and citation gates whichever route produced it.
 """
 
 from __future__ import annotations
@@ -63,7 +66,7 @@ def build_graph(deps: Deps | None = None) -> Any:
     g.add_conditional_edges("actor", nodes.critic_edge, {"critic": "critic", "ground": "ground"})
     g.add_edge("critic", "ground")
     g.add_conditional_edges(
-        "agent", nodes.agent_edge, {"ground": "ground", "entity_filter": "entity_filter"}
+        "agent", nodes.agent_edge, {"actor": "actor", "entity_filter": "entity_filter"}
     )
     g.add_edge("ground", "screen_output")
     g.add_edge("screen_output", END)
