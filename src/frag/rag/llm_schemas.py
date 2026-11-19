@@ -10,9 +10,9 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class ActorResponse(BaseModel):
-    # `answer` is required: a missing field must fail validation (and abstain upstream)
-    # rather than default to "" and be accepted as an empty answer.
-    answer: str
+    # `answer` is required and non-empty: a missing or blank answer must fail validation
+    # (and abstain upstream) rather than be accepted as an empty answer.
+    answer: str = Field(min_length=1)
     citations: list[str] = Field(default_factory=list)
 
     @field_validator("answer", mode="before")

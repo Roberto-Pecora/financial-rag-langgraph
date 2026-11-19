@@ -63,9 +63,13 @@ def test_critic_accepts_genuine_zero_and_defaults_issues():
     assert resp.issues == []
 
 
-def test_actor_requires_answer_but_not_citations():
+@pytest.mark.parametrize("payload", ["{}", '{"answer": ""}', '{"answer": "   "}'])
+def test_actor_rejects_missing_or_blank_answer(payload):
     with pytest.raises(ValidationError):
-        ActorResponse.model_validate_json("{}")
+        ActorResponse.model_validate_json(payload)
+
+
+def test_actor_requires_answer_but_not_citations():
     assert ActorResponse.model_validate({"answer": "x"}).citations == []
 
 
@@ -80,12 +84,16 @@ def test_critic_validation_failure_reports_critic_failed(deps, monkeypatch):
     assert out["critic_notes"] == "critic failed"
 
 
-def test_critic_explicit_all_zero_reports_no_response(deps, monkeypatch):
+def test_critic_genuine_zero_verdict_is_a_normal_veto(deps, monkeypatch):
+    # A real all-zero verdict (with reasons) must not be mislabelled as an empty reply.
     monkeypatch.setattr(settings, "critic", True)
-    deps.critic_llm = FakeLLM(CriticResponse.model_validate({k: 0.0 for k in _FULL}))
+    deps.critic_llm = FakeLLM(
+        CriticResponse.model_validate({**{k: 0.0 for k in _FULL}, "issues": ["wrong figure"]})
+    )
     out = run("What were Amazon net sales?", deps=deps)
     assert out["status"] == "abstained"
-    assert out["critic_notes"] == "critic no-response"
+    assert out["critic_score"] == 0.0
+    assert out["critic_notes"].startswith("faithfulness=0.00")
 
 
 def test_actor_validation_failure_abstains(deps):
