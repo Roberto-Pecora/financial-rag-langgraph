@@ -1,6 +1,6 @@
 .PHONY: install test check fmt up down serve
 install:
-	uv venv --python 3.11 && uv pip install -e ".[dev]"
+	uv venv --python 3.11 && uv pip install -e ".[dev,sources]"
 test:
 	uv run pytest -q
 check:

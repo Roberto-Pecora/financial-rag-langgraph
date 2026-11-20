@@ -91,7 +91,7 @@ Requires Python 3.11 or 3.12 and [uv](https://docs.astral.sh/uv/). Docker is
 optional (see below).
 
 ```bash
-make install          # uv venv + editable install with dev extras
+make install          # uv venv + editable install (dev + sources extras)
 make up               # Qdrant + self-hosted Langfuse via Docker Compose
 cp .env.example .env  # add OPENROUTER_API_KEY
 ```
