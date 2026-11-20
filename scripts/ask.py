@@ -1,6 +1,6 @@
 """Ask the graph a question from the CLI (traced to Langfuse if configured).
 
-    python scripts/ask.py "What changed in revenue and liquidity?"
+python scripts/ask.py "What changed in revenue and liquidity?"
 """
 
 from __future__ import annotations

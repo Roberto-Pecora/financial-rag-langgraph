@@ -1,6 +1,6 @@
 """Derive the curated golden set from the seed CSV.
 
-    python scripts/build_golden.py [--seed data/golden_seed.csv --out data/golden_curated.csv]
+python scripts/build_golden.py [--seed data/golden_seed.csv --out data/golden_curated.csv]
 """
 
 from __future__ import annotations

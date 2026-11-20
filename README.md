@@ -1,11 +1,15 @@
 # Financial RAG on LangGraph
 
+[![ci](https://github.com/Roberto-Pecora/financial-rag-langgraph/actions/workflows/ci.yml/badge.svg)](https://github.com/Roberto-Pecora/financial-rag-langgraph/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 A retrieval-first financial research assistant, built as a stateful **LangGraph**
 graph with self-hosted **Langfuse** observability. It answers only from retrieved
 evidence, cites supporting passages, and abstains when the evidence is insufficient.
 
-This is a framework-native, cloud-optional re-architecture of a companion project
-that runs the same pipeline hand-rolled on AWS. The retrieval thesis is unchanged;
+This is a framework-native, cloud-optional re-architecture of a
+[companion project](https://github.com/Roberto-Pecora/financial-rag-aws) that runs the
+same pipeline hand-rolled on AWS. The retrieval thesis is unchanged;
 what changes is that orchestration is a graph and every run is traced.
 
 > The goal is not to use the best model on a public leaderboard. It is to measure
@@ -83,6 +87,9 @@ poisoned document cannot redirect the model or forge a delimiter.
 
 ## Quick start
 
+Requires Python 3.11 or 3.12 and [uv](https://docs.astral.sh/uv/). Docker is
+optional (see below).
+
 ```bash
 make install          # uv venv + editable install with dev extras
 make up               # Qdrant + self-hosted Langfuse via Docker Compose
@@ -98,11 +105,20 @@ embedded on disk; leave the Langfuse keys unset and the app runs untraced.
 Build a corpus, ingest it, and ask:
 
 ```bash
-python scripts/build_corpus.py --out data/corpus.jsonl   # SEC filings (needs SEC_USER_AGENT)
-python scripts/acquire_corpus.py --out data/corpus.jsonl # or CUAD + FinanceBench ([data] extra)
+python scripts/build_corpus.py --out data/corpus.jsonl  # SEC filings (needs SEC_USER_AGENT)
 python scripts/ingest.py --corpus data/corpus.jsonl
 python scripts/ask.py "What changed in revenue and liquidity?"
 ```
+
+Or acquire public benchmark data instead (needs the `[data]` extra). This writes
+`data/corpus_build/corpus.jsonl` and, for FinanceBench, a golden set alongside it:
+
+```bash
+python scripts/acquire_corpus.py --sources financebench --out-dir data/corpus_build
+python scripts/ingest.py --corpus data/corpus_build/corpus.jsonl
+```
+
+`--sources` accepts any of `cuad,financebench,sec` (the default is all three).
 
 Ingestion handles text PDFs (`pymupdf`), table linearisation (`pdfplumber`),
 scanned-document OCR (AWS Textract, injectable and optional), and SEC HTML, all
@@ -112,7 +128,8 @@ Serve the API:
 
 ```bash
 make serve
-curl -s localhost:8000/v1/ask -d '{"question":"What were net sales?"}'
+curl -s localhost:8000/v1/ask -H 'Content-Type: application/json' \
+  -d '{"question":"What were net sales?"}'
 ```
 
 Open `http://localhost:8000/` for a single-page UI that shows the answer, route,
@@ -134,31 +151,41 @@ Behaviour is set by environment (see `.env.example`), read once into a typed
 
 ## Evaluation
 
-Retrieval evaluation is deterministic and content-based: a passage counts as
-relevant when it contains the facts asserted in the golden answer, not when it
-matches a particular chunk id.
+Retrieval evaluation is deterministic, so the numbers exclude LLM variance. Two
+scorers are provided:
+
+- **Content-based** (`eval_content.py`): a passage counts as relevant when it
+  contains every numeric fact in the golden answer, not when it matches a particular
+  chunk id, so runs over differently chunked collections stay comparable. Questions
+  whose answer has no numeric fact are excluded from the averages.
+- **Id-based** (`eval_retrieval.py`): exact match against curated `gold_ids`, for a
+  JSONL golden set you maintain (`{"query": ..., "gold_ids": [...]}` per line).
 
 ```bash
+python scripts/eval_content.py --golden data/corpus_build/golden_financebench.csv
+python scripts/eval_content.py --golden data/corpus_build/golden_financebench.csv --rerank
 python scripts/eval_retrieval.py --golden data/golden.jsonl --k 10
 ```
 
-`recall@k`, `precision@k`, `MRR@k`, and `nDCG@k` are computed exactly and pushed to
-Langfuse as scores, so retrieval quality is tracked over time next to request traces.
+`recall@k` here is a hit rate (at least one relevant passage in the top k). Mean
+metrics are pushed to Langfuse as scores when tracing is configured, so retrieval
+quality is tracked over time next to request traces.
 
 ### Baseline on FinanceBench
 
-Measured on the FinanceBench evidence corpus (276 chunks) over the 110 questions
-whose answer contains a figure, scored by content-based relevance. Base models, no
-fine-tuning:
+Reproduced with the two `eval_content.py` commands above on the FinanceBench evidence
+corpus from `acquire_corpus.py --sources financebench` (180 chunks): 110 of the 150
+golden questions have a figure in their answer and are scored. Base models, no
+fine-tuning; the reranked run reranks 30 hybrid candidates down to 10:
 
 | Configuration | recall@1 | recall@5 | recall@10 | nDCG@10 |
 |---|---:|---:|---:|---:|
-| Hybrid dense + BM25 with RRF (`bge-base`) | 0.064 | 0.136 | 0.182 | 0.117 |
-| + off-the-shelf cross-encoder rerank | 0.064 | 0.118 | 0.200 | 0.120 |
+| Hybrid dense + BM25 with RRF (`bge-base`) | 0.082 | 0.145 | 0.191 | 0.129 |
+| + off-the-shelf cross-encoder rerank | 0.073 | 0.155 | 0.209 | 0.132 |
 
 FinanceBench is hard for base retrieval: the answer is often a figure buried in a
 table that a general-purpose embedding ranks low. A generic reranker barely moves
-it — recall@10 nudges up, recall@5 slips. That is the point of the project's thesis:
+it — recall@10 nudges up, recall@1 slips. That is the point of the project's thesis:
 fine-tuning the embedder and reranker on the target corpus improves retrieval more
 than substituting a different general-purpose model. These numbers are the baseline
 that fine-tuning has to improve on.
@@ -203,12 +230,14 @@ python scripts/finetune_embedding.py --pairs data/pairs.jsonl --out artifacts/bg
 python scripts/train_reranker.py --pairs data/pairs.jsonl --out artifacts/reranker
 ```
 
-A golden set for evaluation is derived from the corpus and can be re-verified when
-chunking changes:
+For id-based evaluation, a curated golden set is built from a seed CSV at
+`data/golden_seed.csv`. The FinanceBench golden file is already in seed format, and
+its gold ids can be re-verified against the current chunks whenever chunking changes:
 
 ```bash
-python scripts/build_golden.py
-python scripts/verify_golden.py   # --write to expand gold ids after a re-chunk
+cp data/corpus_build/golden_financebench.csv data/golden_seed.csv
+python scripts/verify_golden.py   # --write to fill or expand gold ids after a re-chunk
+python scripts/build_golden.py    # writes data/golden_curated.csv
 ```
 
 A self-contained GPU notebook, `notebooks/finetune_cuad.ipynb`, runs the fine-tune
@@ -243,9 +272,9 @@ Measured on the sample corpus with embedded Qdrant and `bge-base` on Apple MPS.
   under-emit tool calls — the graph falls back to the retrieval path.
 - **Measured effect.** Live on OpenRouter (Llama 3.3 70B, critic on, 30 FinanceBench
   questions, one run per version): before these changes 4/30 answers were accepted
-  empty and 3/30 were tool-call strings; after, 0 and 0, with every answer passing the
-  critic. The cost is more abstentions: some multi-hop questions the ungated agent
-  answered correctly now abstain.
+  empty, 3/30 were tool-call strings, and 4/30 skipped the critic; after, 0, 0 and 0 —
+  every answer now goes through the critic. The cost is more abstentions: some
+  multi-hop questions the ungated agent answered correctly now abstain.
 - **No cloud or Docker dependency.** Setting `QDRANT_PATH` runs Qdrant embedded on
   disk; the application, retrieval, and evaluation run locally, with tracing optional.
 

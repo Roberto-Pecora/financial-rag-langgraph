@@ -7,7 +7,7 @@ name = "frag"
 version = "0.1.0"
 description = "Financial RAG on LangGraph: a stateful retrieve-grade-answer graph with a tool-using agent, self-hosted Langfuse observability, and deterministic retrieval evaluation."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.13"  # numpy 1.26 ships no 3.13 wheels
 license = { text = "MIT" }
 dependencies = [
   "langgraph==0.2.45",
