@@ -18,13 +18,13 @@ question
    ▼
 screen_input ─refused─▶ end
    │
-rewrite (follow-up → standalone) ─▶ route ─┬─ multi_hop ─▶ agent (tool-loop)
-                                           │
-                                           └─ lookup ─▶ entity_filter ─▶ retrieve
-                                                                            │
-                                        rewrite_query ◀── grade ──enough──▶ rerank
-                                             │                                │
-                                             └──▶ retrieve                   actor
+rewrite (follow-up → standalone) ─▶ route ─┬─ multi_hop ─▶ agent (gathers evidence) ─┐
+                                           │      └─ no evidence ─▶ entity_filter     │
+                                           └─ lookup ─▶ entity_filter ─▶ retrieve     │
+                                                                            │         │
+                                        rewrite_query ◀── grade ──enough──▶ rerank    │
+                                             │                                │       │
+                                             └──▶ retrieve                   actor ◀──┘
                                                                               │
                                         ground ◀── critic (optional gate) ◀───┘
                                              │
@@ -56,7 +56,7 @@ quality are read side by side.
 | Orchestration | LangGraph `StateGraph`, cycles for corrective retrieval, conditional edges for routing |
 | Retrieval | Qdrant dense k-NN + in-memory BM25, fused with Reciprocal Rank Fusion |
 | Reranking | Optional corpus-trained cross-encoder over the fused candidates |
-| Agent | Prebuilt ReAct tool-loop (retrieve, graph lookup, whitelisted calc) under turn budgets |
+| Agent | Prebuilt ReAct tool-loop (retrieve, graph lookup, whitelisted calc) under turn budgets; gathers evidence only, the actor writes the answer |
 | Observability | Self-hosted Langfuse: node traces, LLM spans, and eval scores |
 | LLM | Any OpenAI-compatible endpoint via OpenRouter; model chosen per role |
 | Infrastructure | Docker Compose (Qdrant + Langfuse); no cloud account required |
@@ -72,7 +72,8 @@ quality are read side by side.
 | `retrieve` | Hybrid dense + BM25 retrieval with RRF from Qdrant |
 | `grade` / `rewrite_query` | Corrective retrieval: grade passages, rewrite and re-retrieve if too few are relevant |
 | `rerank` | Optional cross-encoder reranking of the candidate list |
-| `actor` | Grounded answer generation; cite evidence or abstain |
+| `agent` | Multi-hop: a tool-loop that gathers passages, graph facts and calc results as evidence; its own prose is discarded. No retrieved evidence → falls back to `entity_filter` |
+| `actor` | Grounded answer generation for every route; cite evidence or abstain |
 | `critic` | Optional risk gate: score faithfulness/completeness/citation, veto below threshold |
 | `ground` | Explainability: map each fact in the answer to its supporting passage |
 | `screen_output` | Reject answers citing labels not in the retrieved set |
@@ -230,9 +231,21 @@ Measured on the sample corpus with embedded Qdrant and `bge-base` on Apple MPS.
   models frequently return the JSON schema rather than an instance; a framework may
   coerce that into an empty object and cause the critic to reject a valid answer.
   `json_mode` is more reliable and aligns with the prompts' instructions.
-- **Agent-to-RAG fallback.** When the tool-loop returns no answer — some open models
-  under-emit tool calls — the graph falls back to the retrieval path, so a multi-hop
-  question does not dead-end.
+- **Strict output schemas.** Critic scores are required and bounded to [0, 1], and the
+  actor's `answer` must be non-blank. A missing field raises instead of defaulting to
+  `0.0` or `""`, so a malformed reply surfaces as `critic failed` or an abstention, never
+  as a silent veto or an accepted empty answer.
+- **The agent gathers evidence; it does not answer.** With open models the agent's
+  final message was sometimes a tool call written as prose (e.g.
+  `retrieve("AMD cash flow statement FY22")`). Its tools now record what they actually
+  returned, and that evidence goes through the same actor, critic, grounding and
+  citation screen as a lookup. If the agent retrieved nothing — some open models
+  under-emit tool calls — the graph falls back to the retrieval path.
+- **Measured effect.** Live on OpenRouter (Llama 3.3 70B, critic on, 30 FinanceBench
+  questions, one run per version): before these changes 4/30 answers were accepted
+  empty and 3/30 were tool-call strings; after, 0 and 0, with every answer passing the
+  critic. The cost is more abstentions: some multi-hop questions the ungated agent
+  answered correctly now abstain.
 - **No cloud or Docker dependency.** Setting `QDRANT_PATH` runs Qdrant embedded on
   disk; the application, retrieval, and evaluation run locally, with tracing optional.
 
