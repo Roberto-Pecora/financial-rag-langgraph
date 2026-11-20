@@ -1,12 +1,12 @@
 .PHONY: install test check fmt up down serve
 install:
-	uv venv && uv pip install -e ".[dev]"
+	uv venv --python 3.11 && uv pip install -e ".[dev,sources]"
 test:
 	uv run pytest -q
 check:
-	uv run ruff check src tests && uv run ruff format --check src tests
+	uv run ruff check src tests scripts && uv run ruff format --check src tests scripts
 fmt:
-	uv run ruff format src tests && uv run ruff check --fix src tests
+	uv run ruff format src tests scripts && uv run ruff check --fix src tests scripts
 up:
 	docker compose up -d
 down:

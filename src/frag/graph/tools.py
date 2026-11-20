@@ -8,6 +8,7 @@ whitelisted AST — no eval, no names, no calls.
 from __future__ import annotations
 
 import ast
+import itertools
 import operator
 from typing import Any
 
@@ -55,22 +56,44 @@ def _doc_id(ctx: dict, idx: int) -> str:
     return meta.get("doc_id") or meta.get("id") or f"doc-{idx + 1}"
 
 
-def make_tools(store: Any, graph: Any = None) -> list[StructuredTool]:
-    """Build the agent's tools bound to a store (and optional knowledge graph)."""
+def make_tools(
+    store: Any, graph: Any = None, sink: list[dict[str, Any]] | None = None
+) -> list[StructuredTool]:
+    """Build the agent's tools bound to a store (and optional knowledge graph).
+
+    If `sink` is given, every passage, graph fact and successful calculation the
+    tools return is also appended to it as a structured context, so the caller can
+    answer from what the tools actually produced rather than from the model's prose.
+    """
+
+    calc_ids = itertools.count(1)  # next() is atomic: safe if ToolNode runs calcs in parallel
+
+    def _record(ctx: dict[str, Any]) -> None:
+        if sink is not None:
+            sink.append(ctx)
 
     def retrieve(query: str) -> str:
         hits = store.search(query=query, top_k=5)
         if not hits:
             return "No passages found."
+        for i, h in enumerate(hits):
+            _record({**h, "metadata": {**(h.get("metadata") or {}), "doc_id": _doc_id(h, i)}})
         return "\n\n".join(
             wrap_untrusted(_doc_id(h, i), h.get("text", "")) for i, h in enumerate(hits)
         )
 
     def financial_calc(expression: str) -> str:
         try:
-            return safe_calc(expression)
+            result = safe_calc(expression)
         except (ValueError, SyntaxError, ZeroDivisionError) as exc:
             return f"calc error: {exc}"
+        _record(
+            {
+                "text": f"{expression} = {result}",
+                "metadata": {"doc_id": f"calc-{next(calc_ids)}", "source": "calc"},
+            }
+        )
+        return result
 
     tools = [
         StructuredTool.from_function(
@@ -92,7 +115,9 @@ def make_tools(store: Any, graph: Any = None) -> list[StructuredTool]:
             facts = graph.neighbours(entity) if hasattr(graph, "neighbours") else []
             if not facts:
                 return f"No graph facts for {entity!r}."
-            return wrap_untrusted(f"graph:{entity}", "; ".join(str(f) for f in facts))
+            text = "; ".join(str(f) for f in facts)
+            _record({"text": text, "metadata": {"doc_id": f"graph:{entity}", "source": "graph"}})
+            return wrap_untrusted(f"graph:{entity}", text)
 
         tools.append(
             StructuredTool.from_function(

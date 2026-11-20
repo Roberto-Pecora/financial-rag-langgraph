@@ -205,20 +205,6 @@ def critic_node(deps: Deps) -> Callable[[GraphState], dict]:
         except Exception as exc:
             logger.warning("critic call failed; vetoing", error=str(exc))
             return {"status": "abstained", "critic_score": 0.0, "critic_notes": "critic failed"}
-        # All-zero scores mean an empty/omitted-field response.
-        scores = (
-            resp.overall_score,
-            resp.faithfulness_score,
-            resp.completeness_score,
-            resp.citation_score,
-        )
-        if not any(scores):
-            logger.warning("critic returned all-zero scores; treating as failure")
-            return {
-                "status": "abstained",
-                "critic_score": 0.0,
-                "critic_notes": "critic no-response",
-            }
         notes = (
             f"faithfulness={resp.faithfulness_score:.2f} "
             f"completeness={resp.completeness_score:.2f} citations={resp.citation_score:.2f}"
@@ -291,8 +277,10 @@ def critic_edge(state: GraphState) -> str:
 
 
 def agent_edge(state: GraphState) -> str:
-    """If the tool-loop produced no answer, fall back to the RAG path."""
-    if (state.get("answer") or "").strip():
-        return "ground"
-    logger.warning("agent produced no answer; falling back to RAG")
+    """Answer from the agent's evidence via the actor; with none, fall back to RAG."""
+    from frag.graph.agent import has_retrieved_evidence
+
+    if has_retrieved_evidence(state.get("contexts") or []):
+        return "actor"
+    logger.warning("agent gathered no retrieved evidence; falling back to RAG")
     return "entity_filter"

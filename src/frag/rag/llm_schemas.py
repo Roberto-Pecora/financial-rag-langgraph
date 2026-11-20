@@ -10,7 +10,9 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class ActorResponse(BaseModel):
-    answer: str = ""
+    # `answer` is required and non-empty: a missing or blank answer must fail validation
+    # (and abstain upstream) rather than be accepted as an empty answer.
+    answer: str = Field(min_length=1)
     citations: list[str] = Field(default_factory=list)
 
     @field_validator("answer", mode="before")
@@ -27,10 +29,14 @@ class ActorResponse(BaseModel):
 
 
 class CriticResponse(BaseModel):
-    overall_score: float = 0.0
-    faithfulness_score: float = 0.0
-    completeness_score: float = 0.0
-    citation_score: float = 0.0
+    # Scores are required and bounded: a missing score must raise ValidationError (the
+    # node reports "critic failed") instead of defaulting to 0.0, which was
+    # indistinguishable from a genuine veto; an out-of-range score must not slip past
+    # the `>= critic_min_score` gate.
+    overall_score: float = Field(ge=0.0, le=1.0)
+    faithfulness_score: float = Field(ge=0.0, le=1.0)
+    completeness_score: float = Field(ge=0.0, le=1.0)
+    citation_score: float = Field(ge=0.0, le=1.0)
     issues: list[str] = Field(default_factory=list)
 
     @field_validator("issues", mode="before")
